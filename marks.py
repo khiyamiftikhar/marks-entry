@@ -1,4 +1,3 @@
-
 import sys
 import pandas as pd
 import os
@@ -73,6 +72,16 @@ def get_marks_input():
         elif event.event_type == keyboard.KEY_UP and event.name in pressed_keys:
             pressed_keys.remove(event.name)
 
+def get_total_questions():
+    while True:
+        print("\nEnter the total number of questions: ", end="", flush=True)
+        num_questions = get_marks_input()
+
+        if num_questions == 0:
+            print("❌ Invalid input. Number of questions must be greater than 0.")
+        else:
+            return num_questions
+
 def main():
     if len(sys.argv) != 2:
         print("Usage: python marks.py <ExcelFileName.xlsx>")
@@ -91,6 +100,9 @@ def main():
         sys.exit(1)
 
     print("\nPress 'q' anytime to quit and save changes.")
+
+    # Get the total number of questions for the exam
+    total_questions = get_total_questions()
 
     try:
         while True:
@@ -117,11 +129,13 @@ def main():
                 reg_row = matches.index[selected_idx]
 
             reg_full = df.loc[reg_row, 'Reg Number']
-            print(f"\nEnter marks for {reg_full} (0-9 or A=10, B=11, ...): ", end='', flush=True)
-            marks = get_marks_input()
+            print(f"\nYou are entering marks for {reg_full}.")
 
-            df.at[reg_row, 'Marks'] = marks
-            print(f"✅ Marks updated for {reg_full}: {marks}")
+            for i in range(total_questions):
+                print(f"\nEnter marks for question {i + 1} (0-9 or A=10, B=11, ...): ", end='', flush=True)
+                marks = get_marks_input()
+                df.at[reg_row, f'Q{i + 1}_Marks'] = marks
+                print(f"✅ Marks updated for question {i + 1}: {marks}")
 
     except KeyboardInterrupt:
         print("\n\n⏳ Exiting program. Saving changes...")
