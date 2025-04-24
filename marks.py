@@ -14,7 +14,6 @@ def save_excel(df, file_path):
 
 def get_matching_rows(df, reg_number):
     matches = df[df['Reg Number'].str[-3:].str.upper() == reg_number.upper()]
-    matches = matches[df['Marks'].isna() | (df['Marks'] == "")]
     return matches
 
 def get_three_digit_input():
@@ -82,6 +81,10 @@ def get_total_questions():
         else:
             return num_questions
 
+def check_marks_entered(df, reg_row):
+    """Check if marks are already entered for the given registration row."""
+    return pd.notna(df.at[reg_row, 'Marks']) and df.at[reg_row, 'Marks'] != ""
+
 def main():
     if len(sys.argv) != 2:
         print("Usage: python marks.py <ExcelFileName.xlsx>")
@@ -115,22 +118,34 @@ def main():
 
             matches = get_matching_rows(df, reg_number)
 
+            # Check if any matches found
             if len(matches) == 0:
                 print("❌ No matching registration number found or all already marked.")
                 continue
-            elif len(matches) == 1:
-                reg_row = matches.index[0]
-            else:
+
+            # If more than one match is found, handle duplicates
+            elif len(matches) > 1:
                 print("⚠️ Multiple unmarked entries found:")
                 for idx, (_, row) in enumerate(matches.iterrows(), 1):
                     print(f"{idx}    {row['Reg Number']}")
                 print("Select the correct one by number: ", end="", flush=True)
                 selected_idx = get_one_digit_choice(len(matches))
                 reg_row = matches.index[selected_idx]
+                # If the selected registration already has marks, ask user to re-enter a valid reg number
+                if check_marks_entered(df, reg_row):
+                    print(f"❌ Marks already entered for {df.at[reg_row, 'Reg Number']}. Please re-enter a valid registration number.")
+                    continue
+            else:
+                reg_row = matches.index[0]
+                # If only one match and marks already entered, warn the user and continue
+                if check_marks_entered(df, reg_row):
+                    print(f"❌ Marks already entered for {df.at[reg_row, 'Reg Number']}. Please re-enter a valid registration number.")
+                    continue
 
             reg_full = df.loc[reg_row, 'Reg Number']
             print(f"\nYou are entering marks for {reg_full}.")
 
+            # Enter marks for each question
             for i in range(total_questions):
                 print(f"\nEnter marks for question {i + 1} (0-9 or A=10, B=11, ...): ", end='', flush=True)
                 marks = get_marks_input()
