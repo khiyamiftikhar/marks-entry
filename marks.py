@@ -74,13 +74,15 @@ def get_marks_input():
 
 def get_total_questions():
     while True:
-        print("\nEnter the total number of questions: ", end="", flush=True)
+        print("\nEnter the total number of questions (or 0 for attendance mode): ", end="", flush=True)
         num_questions = get_marks_input()
 
         if num_questions == 0:
-            print("❌ Invalid input. Number of questions must be greater than 0.")
-        else:
+            return 0  # Attendance mode
+        elif num_questions > 0:
             return num_questions
+        else:
+            print("❌ Invalid input. Number of questions must be greater than 0.")
 
 def check_marks_entered(df, reg_row):
     """Check if marks are already entered for the given registration row."""
@@ -113,52 +115,110 @@ def main():
 
     print("\nPress 'q' anytime to quit and save changes.")
 
-    # Get the total number of questions for the exam
+    # Get the total number of questions for the exam or check for attendance mode
     total_questions = get_total_questions()
 
     processed_reg_numbers = set()  # To track the processed registration numbers
 
     try:
-        while True:
-            print("\nEnter 3-digit registration number (or 'q' to quit): ", end='', flush=True)
-            reg_number = get_three_digit_input()
+        if total_questions == 0:  # Attendance mode
+            print("\nYou are in Attendance Mode. Enter registration numbers to mark attendance.")
+            while True:
+                print("\nEnter 3-digit registration number (or 'q' to quit): ", end='', flush=True)
+                reg_number = get_three_digit_input()
 
-            if reg_number == 'q':
+                if reg_number == 'q':
+                    save_excel(df, file_path)
+                    break
+
+                # Get matching entries for the given registration number
+                matches = get_matching_rows(df, reg_number)
+
+                if len(matches) == 0:
+                    print("❌ No matching registration number found.")
+                    continue
+
+                # If only one match is found, automatically mark it
+                if len(matches) == 1:
+                    reg_row = matches.index[0]
+                    df.at[reg_row, 'Marks'] = 1  # Mark attendance
+                    processed_reg_numbers.add(matches.iloc[0]['Reg Number'])  # Add to processed list
+                    print(f"✅ Attendance marked for {matches.iloc[0]['Reg Number']}.")
+
+                # If multiple matches are found, ask the user to select one
+                else:
+                    print("⚠️ Multiple matching registration numbers found:")
+                    # Filter out already processed entries before showing options
+                    unprocessed_matches = matches[~matches['Reg Number'].isin(processed_reg_numbers)]
+
+                    # If there are no unprocessed matches, it means all entries have been marked
+                    if len(unprocessed_matches) == 0:
+                        print("❌ All matching entries have already been marked.")
+                        continue
+
+                    # If only one match remains unmarked, automatically process it
+                    if len(unprocessed_matches) == 1:
+                        reg_row = unprocessed_matches.index[0]
+                        df.at[reg_row, 'Marks'] = 1  # Mark attendance
+                        processed_reg_numbers.add(unprocessed_matches.iloc[0]['Reg Number'])  # Add to processed list
+                        print(f"✅ Attendance marked for {unprocessed_matches.iloc[0]['Reg Number']}.")
+
+                    # If multiple unprocessed matches are found, ask the user to select one
+                    else:
+                        for idx, (_, row) in enumerate(unprocessed_matches.iterrows(), 1):
+                            print(f"{idx}    {row['Reg Number']}")
+                        print("Select the correct one by number: ", end="", flush=True)
+                        selected_idx = get_one_digit_choice(len(unprocessed_matches))
+                        reg_row = unprocessed_matches.index[selected_idx]
+                        df.at[reg_row, 'Marks'] = 1  # Mark attendance
+                        processed_reg_numbers.add(unprocessed_matches.iloc[selected_idx]['Reg Number'])  # Add to processed list
+                        print(f"✅ Attendance marked for {unprocessed_matches.iloc[selected_idx]['Reg Number']}.")
+
+                # Save after each entry to ensure changes are recorded
                 save_excel(df, file_path)
-                break
 
-            # Get the remaining unmarked matches excluding already processed ones
-            unmarked_matches = get_remaining_matches(df, reg_number, processed_reg_numbers)
+        else:  # Regular mode for marks entry
+            print("\nYou are in Marks Entry Mode.")
+            while True:
+                print("\nEnter 3-digit registration number (or 'q' to quit): ", end='', flush=True)
+                reg_number = get_three_digit_input()
 
-            if len(unmarked_matches) == 0:
-                print("❌ No unmarked matching registration number found or all already marked.")
-                continue
+                if reg_number == 'q':
+                    save_excel(df, file_path)
+                    break
 
-            # If only one match is found, automatically proceed without asking
-            if len(unmarked_matches) == 1:
-                reg_row = unmarked_matches.index[0]
-                print(f"\nYou are entering marks for {df.loc[reg_row, 'Reg Number']}.")
-                processed_reg_numbers.add(df.loc[reg_row, 'Reg Number'])
+                # Get the remaining unmarked matches excluding already processed ones
+                unmarked_matches = get_remaining_matches(df, reg_number, processed_reg_numbers)
 
-            # If more than one match is found, handle duplicates
-            else:
-                print("⚠️ Multiple unmarked entries found:")
-                for idx, (_, row) in enumerate(unmarked_matches.iterrows(), 1):
-                    print(f"{idx}    {row['Reg Number']}")
-                print("Select the correct one by number: ", end="", flush=True)
-                selected_idx = get_one_digit_choice(len(unmarked_matches))
-                reg_row = unmarked_matches.index[selected_idx]
-                processed_reg_numbers.add(df.loc[reg_row, 'Reg Number'])
+                if len(unmarked_matches) == 0:
+                    print("❌ No unmarked matching registration number found or all already marked.")
+                    continue
 
-            # Enter marks for each question
-            for i in range(total_questions):
-                print(f"\nEnter marks for question {i + 1} (0-9 or A=10, B=11, ...): ", end='', flush=True)
-                marks = get_marks_input()
-                df.at[reg_row, f'Q{i + 1}_Marks'] = marks
-                print(f"✅ Marks updated for question {i + 1}: {marks}")
+                # If only one match is found, automatically proceed without asking
+                if len(unmarked_matches) == 1:
+                    reg_row = unmarked_matches.index[0]
+                    print(f"\nYou are entering marks for {df.loc[reg_row, 'Reg Number']}.")
+                    processed_reg_numbers.add(df.loc[reg_row, 'Reg Number'])
 
-            # After marking, save the current state in memory (no reloading of DataFrame)
-            save_excel(df, file_path)
+                # If more than one match is found, handle duplicates
+                else:
+                    print("⚠️ Multiple unmarked entries found:")
+                    for idx, (_, row) in enumerate(unmarked_matches.iterrows(), 1):
+                        print(f"{idx}    {row['Reg Number']}")
+                    print("Select the correct one by number: ", end="", flush=True)
+                    selected_idx = get_one_digit_choice(len(unmarked_matches))
+                    reg_row = unmarked_matches.index[selected_idx]
+                    processed_reg_numbers.add(df.loc[reg_row, 'Reg Number'])
+
+                # Enter marks for each question
+                for i in range(total_questions):
+                    print(f"\nEnter marks for question {i + 1} (0-9 or A=10, B=11, ...): ", end='', flush=True)
+                    marks = get_marks_input()
+                    df.at[reg_row, f'Q{i + 1}_Marks'] = marks
+                    print(f"✅ Marks updated for question {i + 1}: {marks}")
+
+                # Save the current state after each marks entry
+                save_excel(df, file_path)
 
     except KeyboardInterrupt:
         print("\n\n⏳ Exiting program. Saving changes...")
