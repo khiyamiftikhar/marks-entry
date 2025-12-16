@@ -131,51 +131,41 @@ def main():
                     save_excel(df, file_path)
                     break
 
-                # Get matching entries for the given registration number
                 matches = get_matching_rows(df, reg_number)
 
                 if len(matches) == 0:
                     print("❌ No matching registration number found.")
                     continue
 
-                # If only one match is found, automatically mark it
-                if len(matches) == 1:
-                    reg_row = matches.index[0]
-                    df.at[reg_row, 'Marks'] = 1  # Mark attendance
-                    processed_reg_numbers.add(matches.iloc[0]['Reg Number'])  # Add to processed list
-                    print(f"✅ Attendance marked for {matches.iloc[0]['Reg Number']}.")
+                # --- NEW: Check if already marked ---
+                unmarked_matches = matches[matches['Marks'].isna() | (matches['Marks'] == "")]
+                if len(unmarked_matches) == 0:
+                    print("❌ Attendance already marked for this registration number.")
+                    continue
+                # -------------------------------------
 
-                # If multiple matches are found, ask the user to select one
-                else:
-                    print("⚠️ Multiple matching registration numbers found:")
-                    # Filter out already processed entries before showing options
-                    unprocessed_matches = matches[~matches['Reg Number'].isin(processed_reg_numbers)]
+                # If only one unmarked match found
+                if len(unmarked_matches) == 1:
+                    row_index = unmarked_matches.index[0]
+                    df.at[row_index, 'Marks'] = 1
+                    print(f"✅ Attendance marked for {unmarked_matches.iloc[0]['Reg Number']}.")
+                    save_excel(df, file_path)
+                    continue
 
-                    # If there are no unprocessed matches, it means all entries have been marked
-                    if len(unprocessed_matches) == 0:
-                        print("❌ All matching entries have already been marked.")
-                        continue
+                # Multiple unmarked matches
+                print("⚠️ Multiple matching unmarked entries:")
+                for idx, (_, row) in enumerate(unmarked_matches.iterrows(), 1):
+                    print(f"{idx}    {row['Reg Number']}")
 
-                    # If only one match remains unmarked, automatically process it
-                    if len(unprocessed_matches) == 1:
-                        reg_row = unprocessed_matches.index[0]
-                        df.at[reg_row, 'Marks'] = 1  # Mark attendance
-                        processed_reg_numbers.add(unprocessed_matches.iloc[0]['Reg Number'])  # Add to processed list
-                        print(f"✅ Attendance marked for {unprocessed_matches.iloc[0]['Reg Number']}.")
+                print("Select the correct one by number: ", end='', flush=True)
+                selected_idx = get_one_digit_choice(len(unmarked_matches))
 
-                    # If multiple unprocessed matches are found, ask the user to select one
-                    else:
-                        for idx, (_, row) in enumerate(unprocessed_matches.iterrows(), 1):
-                            print(f"{idx}    {row['Reg Number']}")
-                        print("Select the correct one by number: ", end="", flush=True)
-                        selected_idx = get_one_digit_choice(len(unprocessed_matches))
-                        reg_row = unprocessed_matches.index[selected_idx]
-                        df.at[reg_row, 'Marks'] = 1  # Mark attendance
-                        processed_reg_numbers.add(unprocessed_matches.iloc[selected_idx]['Reg Number'])  # Add to processed list
-                        print(f"✅ Attendance marked for {unprocessed_matches.iloc[selected_idx]['Reg Number']}.")
+                reg_row = unmarked_matches.index[selected_idx]
+                df.at[reg_row, 'Marks'] = 1
 
-                # Save after each entry to ensure changes are recorded
-                save_excel(df, file_path)
+                print(f"✅ Attendance marked for {unmarked_matches.iloc[selected_idx]['Reg Number']}.")
+            save_excel(df, file_path)
+
 
         else:  # Regular mode for marks entry
             print("\nYou are in Marks Entry Mode.")
