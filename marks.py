@@ -96,6 +96,11 @@ def get_remaining_matches(df, reg_number, processed_reg_numbers):
     unmarked_matches = unmarked_matches[~unmarked_matches['Reg Number'].isin(processed_reg_numbers)]
     return unmarked_matches
 
+def get_display_name(row):
+    """Return the student's name from a DataFrame row."""
+    name = row.get('Name', '')
+    return str(name).strip() if pd.notna(name) and str(name).strip() else row['Reg Number']
+
 def main():
     if len(sys.argv) != 2:
         print("Usage: python marks.py <ExcelFileName.xlsx>")
@@ -109,8 +114,19 @@ def main():
         print(f"❌ Error reading file: {e}")
         sys.exit(1)
 
-    if 'Reg Number' not in df.columns or 'Marks' not in df.columns:
-        print("❌ Excel file must contain 'Reg Number' and 'Marks' columns.")
+    required_columns = ['Reg Number', 'Name', 'Marks']
+    missing = [col for col in required_columns if col not in df.columns]
+
+    if missing:
+        print(f"\n❌ Missing column(s): {', '.join(f'\"{c}\"' for c in missing)}")
+        print("\n   Your Excel sheet must have these exact column headers:\n")
+        print("   ┌─────────────┬──────────────────────┬───────┐")
+        print("   │  Reg Number │         Name         │ Marks │")
+        print("   ├─────────────┼──────────────────────┼───────┤")
+        print("   │ FA23-BEE-055│     Ali              │       │")
+        print("   │ FA23-BEE-061│     Sara             │       │")
+        print("   └─────────────┴──────────────────────┴───────┘")
+        print("\n   ⚠️  Column names are case-sensitive. Fix the headers and try again.\n")
         sys.exit(1)
 
     print("\nPress 'q' anytime to quit and save changes.")
@@ -137,33 +153,34 @@ def main():
                     print("❌ No matching registration number found.")
                     continue
 
-                # --- NEW: Check if already marked ---
+                # --- Check if already marked ---
                 unmarked_matches = matches[matches['Marks'].isna() | (matches['Marks'] == "")]
                 if len(unmarked_matches) == 0:
                     print("❌ Attendance already marked for this registration number.")
                     continue
-                # -------------------------------------
 
                 # If only one unmarked match found
                 if len(unmarked_matches) == 1:
                     row_index = unmarked_matches.index[0]
+                    student_name = get_display_name(unmarked_matches.iloc[0])
                     df.at[row_index, 'Marks'] = 1
-                    print(f"✅ Attendance marked for {unmarked_matches.iloc[0]['Reg Number']}.")
+                    print(f"✅ Attendance marked for {student_name}.")
                     save_excel(df, file_path)
                     continue
 
                 # Multiple unmarked matches
                 print("⚠️ Multiple matching unmarked entries:")
                 for idx, (_, row) in enumerate(unmarked_matches.iterrows(), 1):
-                    print(f"{idx}    {row['Reg Number']}")
+                    print(f"{idx}    {row['Reg Number']}  {row.get('Name', '')}")
 
                 print("Select the correct one by number: ", end='', flush=True)
                 selected_idx = get_one_digit_choice(len(unmarked_matches))
 
                 reg_row = unmarked_matches.index[selected_idx]
+                student_name = get_display_name(unmarked_matches.iloc[selected_idx])
                 df.at[reg_row, 'Marks'] = 1
 
-                print(f"✅ Attendance marked for {unmarked_matches.iloc[selected_idx]['Reg Number']}.")
+                print(f"✅ Attendance marked for {student_name}.")
             save_excel(df, file_path)
 
 
@@ -187,17 +204,20 @@ def main():
                 # If only one match is found, automatically proceed without asking
                 if len(unmarked_matches) == 1:
                     reg_row = unmarked_matches.index[0]
-                    print(f"\nYou are entering marks for {df.loc[reg_row, 'Reg Number']}.")
+                    student_name = get_display_name(unmarked_matches.iloc[0])
+                    print(f"\nYou are entering marks for {student_name}.")
                     processed_reg_numbers.add(df.loc[reg_row, 'Reg Number'])
 
                 # If more than one match is found, handle duplicates
                 else:
                     print("⚠️ Multiple unmarked entries found:")
                     for idx, (_, row) in enumerate(unmarked_matches.iterrows(), 1):
-                        print(f"{idx}    {row['Reg Number']}")
+                        print(f"{idx}    {row['Reg Number']}  {row.get('Name', '')}")
                     print("Select the correct one by number: ", end="", flush=True)
                     selected_idx = get_one_digit_choice(len(unmarked_matches))
                     reg_row = unmarked_matches.index[selected_idx]
+                    student_name = get_display_name(unmarked_matches.iloc[selected_idx])
+                    print(f"\nYou are entering marks for {student_name}.")
                     processed_reg_numbers.add(df.loc[reg_row, 'Reg Number'])
 
                 # Enter marks for each question
